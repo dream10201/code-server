@@ -1,6 +1,6 @@
 import { logger } from "@coder/logger"
 import compression from "compression"
-import express, { Express } from "express"
+import express, { Express, Request, Response } from "express"
 import { promises as fs } from "fs"
 import http from "http"
 import * as httpolyglot from "httpolyglot"
@@ -24,6 +24,23 @@ export interface App extends Disposable {
   server: http.Server
   /** Handles requests to the editor session management API. */
   editorSessionManagerServer: http.Server
+}
+
+const shouldSkipCompression = (hostHeader: string | undefined): boolean => {
+  if (!hostHeader) {
+    return false
+  }
+
+  const hostname = hostHeader.split(":")[0]
+  return hostname.endsWith(".vscode-cdn.net")
+}
+
+export const shouldCompressResponse = (req: Request, res: Response): boolean => {
+  if (shouldSkipCompression(req.header("host"))) {
+    return false
+  }
+
+  return compression.filter(req, res)
 }
 
 const isSocketOpts = (opts: ListenOptions): opts is SocketOptions => {
@@ -68,7 +85,11 @@ export const listen = async (server: http.Server, opts: ListenOptions) => {
  */
 export const createApp = async (args: DefaultedArgs): Promise<App> => {
   const router = express()
-  router.use(compression())
+  router.use(
+    compression({
+      filter: shouldCompressResponse,
+    }),
+  )
 
   const server = args.cert
     ? httpolyglot.createServer(
