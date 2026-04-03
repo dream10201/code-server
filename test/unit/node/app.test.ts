@@ -3,7 +3,13 @@ import { promises } from "fs"
 import * as http from "http"
 import * as https from "https"
 import * as path from "path"
-import { createApp, ensureAddress, handleArgsSocketCatchError, listen } from "../../../src/node/app"
+import {
+  createApp,
+  ensureAddress,
+  handleArgsSocketCatchError,
+  listen,
+  shouldCompressResponse,
+} from "../../../src/node/app"
 import { OptionalString, setDefaults } from "../../../src/node/cli"
 import { generateCertificate } from "../../../src/node/util"
 import { clean, mockLogger, getAvailablePort, tmpdir } from "../../utils/helpers"
@@ -259,5 +265,30 @@ describe("listen", () => {
       expect(error).toBeInstanceOf(Error)
       expect((error as any).message).toMatch(errorMessage)
     }
+  })
+})
+
+describe("shouldCompressResponse", () => {
+  it("should disable compression for vscode-cdn hosts", () => {
+    const req = {
+      header: jest.fn().mockReturnValue("vscode-remote+code-002ebidd-002enet.vscode-resource.vscode-cdn.net"),
+    }
+    const res = {}
+
+    expect(shouldCompressResponse(req as any, res as any)).toBe(false)
+  })
+
+  it("should allow compression for non-vscode-cdn hosts when accepted", () => {
+    const req = {
+      header: jest.fn().mockReturnValue("127.0.0.1:8080"),
+      headers: {
+        "accept-encoding": "gzip, deflate, br",
+      },
+    }
+    const res = {
+      getHeader: jest.fn().mockReturnValue(undefined),
+    }
+
+    expect(shouldCompressResponse(req as any, res as any)).toBe(true)
   })
 })
